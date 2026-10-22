@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-build-${{ github.ref }}
@@ -67,6 +67,12 @@ jobs:
           sed -i "/applicationIdSuffix/d" app/build.gradle
           grep -q "applicationId 'xendroid.compose'" app/build.gradle
 
+      # Obtainium and Android need a higher versionCode for each APK update.
+      - name: Set increasing version code
+        run: |
+          sed -i -E "s/^[[:space:]]*versionCode [0-9]+/        versionCode ${GITHUB_RUN_NUMBER}/" app/build.gradle
+          grep -q "versionCode ${GITHUB_RUN_NUMBER}" app/build.gradle
+
       - name: Configure persistent signing key (optional)
         env:
           XENDROID_KEYSTORE_BASE64: ${{ secrets.XENDROID_KEYSTORE_BASE64 }}
@@ -98,3 +104,15 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 90
+
+      - name: Publish APK as a GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="build-${GITHUB_RUN_NUMBER}"
+          apk="XenDroid-Argosy-build-${GITHUB_RUN_NUMBER}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$apk"
+          gh release create "$tag" "$apk" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "XenDroid Argosy build ${GITHUB_RUN_NUMBER}" \
+            --notes "Automatically built from commit ${GITHUB_SHA}."

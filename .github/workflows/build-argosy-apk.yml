@@ -1,0 +1,77 @@
+name: Build Argosy-compatible APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out source and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install host shader tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y glslang-tools spirv-tools
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install pinned Android build tools
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "ndk;29.0.14206865" \
+            "cmake;3.30.3"
+
+      # These Android build helpers are referenced by the checked-in CMake
+      # files but omitted from this repository's source snapshot.
+      - name: Restore XenDroid Android build helpers
+        env:
+          HELPER_BASE: https://raw.githubusercontent.com/rfandango/XenDroid/master/emulator-core/src/main/cpp/xenia/tools/build
+        run: |
+          helper_dir="emulator-core/src/main/cpp/xenia/tools/build"
+          mkdir -p "$helper_dir"
+          for helper in gen_android_spirv.py embed_bundle.py compile_shader_spirv.py; do
+            curl --fail --location --silent --show-error \
+              "$HELPER_BASE/$helper" -o "$helper_dir/$helper"
+          done
+
+      # Argosy's configured XenDroid integration expects package xendroid.compose.
+      # Strip the fork's debug/release suffixes only in the ephemeral CI checkout.
+      - name: Set Argosy-compatible application ID
+        run: |
+          sed -i "/applicationIdSuffix/d" app/build.gradle
+          grep -q "applicationId 'xendroid.compose'" app/build.gradle
+
+      - name: Build APK
+        run: bash gradlew --no-daemon :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: xendroid-argosy-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 90

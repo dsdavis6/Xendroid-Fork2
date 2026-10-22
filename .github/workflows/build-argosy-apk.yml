@@ -65,6 +65,27 @@ jobs:
           sed -i "/applicationIdSuffix/d" app/build.gradle
           grep -q "applicationId 'xendroid.compose'" app/build.gradle
 
+      - name: Configure persistent signing key (optional)
+        env:
+          XENDROID_KEYSTORE_BASE64: ${{ secrets.XENDROID_KEYSTORE_BASE64 }}
+          XENDROID_STORE_PASSWORD: ${{ secrets.XENDROID_STORE_PASSWORD }}
+          XENDROID_KEY_ALIAS: ${{ secrets.XENDROID_KEY_ALIAS }}
+          XENDROID_KEY_PASSWORD: ${{ secrets.XENDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$XENDROID_KEYSTORE_BASE64" ]; then
+            echo "::warning::No persistent signing key configured; this APK uses a temporary runner debug key."
+            exit 0
+          fi
+          : "${XENDROID_STORE_PASSWORD:?Missing XENDROID_STORE_PASSWORD secret}"
+          : "${XENDROID_KEY_ALIAS:?Missing XENDROID_KEY_ALIAS secret}"
+          : "${XENDROID_KEY_PASSWORD:?Missing XENDROID_KEY_PASSWORD secret}"
+          keystore="$RUNNER_TEMP/xendroid-signing.jks"
+          printf '%s' "$XENDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          echo "XENDROID_KEYSTORE_FILE=$keystore" >> "$GITHUB_ENV"
+          echo "XENDROID_STORE_PASSWORD=$XENDROID_STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "XENDROID_KEY_ALIAS=$XENDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "XENDROID_KEY_PASSWORD=$XENDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+
       - name: Build APK
         run: bash gradlew --no-daemon :app:assembleDebug
 

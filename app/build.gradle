@@ -76,12 +76,29 @@ android {
         }
     }
 
+    // CI can use a persistent key from GitHub Actions secrets so APKs from
+    // separate runners can update one another. Local builds keep Android's
+    // normal debug signing key when these variables are absent.
+    if (System.getenv('XENDROID_KEYSTORE_FILE')) {
+        signingConfigs {
+            stable {
+                storeFile project.file(System.getenv('XENDROID_KEYSTORE_FILE'))
+                storePassword System.getenv('XENDROID_STORE_PASSWORD')
+                keyAlias System.getenv('XENDROID_KEY_ALIAS')
+                keyPassword System.getenv('XENDROID_KEY_PASSWORD')
+            }
+        }
+    }
+
     buildTypes {
         // Own application id so a debug build installs alongside a release one.
         // The java namespace stays xendroid.compose, so JNI FindClass is unaffected.
         debug {
             applicationIdSuffix '.debug'
             versionNameSuffix '-debug'
+            if (System.getenv('XENDROID_KEYSTORE_FILE')) {
+                signingConfig signingConfigs.stable
+            }
         }
 release {
     applicationIdSuffix '.fork'

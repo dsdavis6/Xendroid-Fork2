@@ -55,7 +55,7 @@ jobs:
         run: |
           helper_dir="emulator-core/src/main/cpp/xenia/tools/build"
           mkdir -p "$helper_dir"
-          for helper in gen_android_spirv.py embed_bundle.py compile_shader_spirv.py; do
+          for helper in gen_android_spirv.py embed_bundle.py compile_shader_spirv.py shader_cc.cc; do
             curl --fail --location --silent --show-error \
               "$HELPER_BASE/$helper" -o "$helper_dir/$helper"
           done
